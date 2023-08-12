@@ -1,4 +1,7 @@
 /target
 
+# Environment
+.env
+
 # Nixos
 shell.nix
