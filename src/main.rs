@@ -5,16 +5,34 @@ use axum::response::{Html, Redirect};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
 use serde::{Deserialize, Serialize};
+use sqlx::Pool;
 use std::vec::Vec;
 use tera::{Context, Tera};
 
+use sqlx::postgres::{PgPool, PgPoolOptions, Postgres};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
+
+struct AppState {
+    tera: Tera,
+    db: Pool<Postgres>,
+}
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+
+    let db_connection_str = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:password@localhost".to_string());
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(Duration::from_secs(3))
+        .connect(&db_connection_str)
+        .await
+        .expect("can't connect to database");
 
     let tera = match Tera::new("templates/**/*.html") {
         Ok(t) => t,
@@ -23,13 +41,13 @@ async fn main() {
             ::std::process::exit(1);
         }
     };
-    let shared_tera = Arc::new(tera);
+    let state = Arc::new(AppState { tera, db: pool });
 
     let app = Router::new()
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
         .route("/contacts/create", get(create_contact).post(create_contact))
-        .with_state(shared_tera);
+        .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
     tracing::info!("listening on {}", addr);
@@ -39,11 +57,11 @@ async fn main() {
         .unwrap();
 }
 
-async fn contacts(State(state): State<Arc<Tera>>) -> Html<String> {
-    let contacts = Contact::all().await;
+async fn contacts(State(app): State<Arc<AppState>>) -> Html<String> {
+    let contacts = Contact::all(&app.db).await.unwrap();
     let mut context = Context::new();
     context.insert("contacts", &contacts);
-    Html(state.render("contacts/list.html", &context).unwrap())
+    Html(app.tera.render("contacts/list.html", &context).unwrap())
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -56,7 +74,7 @@ struct ContactForm {
 
 async fn create_contact(
     method: Method,
-    State(tera): State<Arc<Tera>>,
+    State(app): State<Arc<AppState>>,
     Form(form): Form<ContactForm>,
 ) -> Html<String> {
     match method {
@@ -74,50 +92,38 @@ async fn create_contact(
     context.insert(
         "contact",
         &Contact {
-            id: "".to_string(),
+            id: 1,
             first: "".to_string(),
-            last: "".to_string(),
+            last: Some("".to_string()),
             phone: "".to_string(),
             email: "".to_string(),
         },
     );
-    Html(tera.render("contacts/create.html", &context).unwrap())
+    Html(app.tera.render("contacts/create.html", &context).unwrap())
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Contact {
-    id: String,
+    id: i32,
     first: String,
-    last: String,
+    last: Option<String>,
     phone: String,
     email: String,
 }
 
 impl Contact {
-    async fn all() -> Vec<Contact> {
-        vec![
-            Contact {
-                id: "aoeustheuoeuhoeu".to_string(),
-                first: "Test".to_string(),
-                last: "User".to_string(),
-                phone: "1234567899".to_string(),
-                email: "test@test.com".to_string(),
-            },
-            Contact {
-                id: "oauaoeuoaeuoeauaoeu".to_string(),
-                first: "Test2".to_string(),
-                last: "User".to_string(),
-                phone: "1234767899".to_string(),
-                email: "test2@test.com".to_string(),
-            },
-        ]
+    async fn all(pool: &Pool<Postgres>) -> Result<Vec<Contact>, sqlx::Error> {
+        let contacts = sqlx::query_as!(Contact, "SELECT * FROM contacts;")
+            .fetch_all(pool)
+            .await;
+        contacts
     }
 
     fn search(query: String) -> Self {
         Contact {
-            id: "aoeustheuoeuhoeu".to_string(),
+            id: 1,
             first: "Test".to_string(),
-            last: "User".to_string(),
+            last: Some("User".to_string()),
             phone: "1234567899".to_string(),
             email: "test@test.com".to_string(),
         }
