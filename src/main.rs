@@ -1,12 +1,14 @@
+use axum::body::Body;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{method::Method, Request, StatusCode};
 use axum::response::{Html, Redirect};
-use axum::routing::get;
-use axum::{Json, Router};
+use axum::routing::{get, post};
+use axum::{Form, Json, Router};
 use serde::{Deserialize, Serialize};
 use std::vec::Vec;
 use tera::{Context, Tera};
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -26,7 +28,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
-        .route("/contacts/create", get(create_contact))
+        .route("/contacts/create", get(create_contact).post(create_contact))
         .with_state(shared_tera);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
@@ -44,9 +46,42 @@ async fn contacts(State(state): State<Arc<Tera>>) -> Html<String> {
     Html(state.render("contacts/list.html", &context).unwrap())
 }
 
-async fn create_contact(State(state): State<Arc<Tera>>) -> Html<String> {
-    let context = Context::new();
-    Html(state.render("contacts/create.html", &context).unwrap())
+#[derive(Debug, Deserialize, Serialize)]
+struct ContactForm {
+    first: String,
+    last: String,
+    email: String,
+    phone: String,
+}
+
+async fn create_contact(
+    method: Method,
+    State(tera): State<Arc<Tera>>,
+    Form(form): Form<ContactForm>,
+) -> Html<String> {
+    match method {
+        Method::GET => {
+            println!("000000000000000")
+        }
+        Method::POST => {
+            println!("111111111111111, {:?} {}", form, method)
+        }
+        _ => {
+            println!("******************")
+        }
+    }
+    let mut context = Context::new();
+    context.insert(
+        "contact",
+        &Contact {
+            id: "".to_string(),
+            first: "".to_string(),
+            last: "".to_string(),
+            phone: "".to_string(),
+            email: "".to_string(),
+        },
+    );
+    Html(tera.render("contacts/create.html", &context).unwrap())
 }
 
 #[derive(Deserialize, Serialize)]
