@@ -26,6 +26,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
+        .route("/contacts/create", get(create_contact))
         .with_state(shared_tera);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
@@ -41,6 +42,11 @@ async fn contacts(State(state): State<Arc<Tera>>) -> Html<String> {
     let mut context = Context::new();
     context.insert("contacts", &contacts);
     Html(state.render("contacts/list.html", &context).unwrap())
+}
+
+async fn create_contact(State(state): State<Arc<Tera>>) -> Html<String> {
+    let context = Context::new();
+    Html(state.render("contacts/create.html", &context).unwrap())
 }
 
 #[derive(Deserialize, Serialize)]
