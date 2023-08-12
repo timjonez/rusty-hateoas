@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<form action="/contacts/new" method="post">
+    <fieldset>
+        <legend>Contact Values</legend>
+        <p>
+            <label for="email">Email</label>
+            <input name="email" id="email" type="email" placeholder="Email" value="{{ contact.email or 'Test' }}">
+        </p>
+        <p>
+            <label for="first_name">First Name</label>
+            <input name="first_name" id="first_name" type="text" placeholder="First Name" value="{{ contact.first or '' }}">
+        </p>
+        <p>
+            <label for="last_name">Last Name</label>
+            <input name="last_name" id="last_name" type="text" placeholder="Last Name" value="{{ contact.last or '' }}">
+        </p>
+        <p>
+            <label for="phone">Phone</label>
+            <input name="phone" id="phone" type="text" placeholder="Phone" value="{{ contact.phone or '' }}">
+        </p>
+
+        <button>Save</button>
+    </fieldset>
+</form>
+
+<p>
+    <a href="/contacts">Back</a>
+</p>
+
+{% endblock content %}
