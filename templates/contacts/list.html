@@ -1,6 +1,11 @@
 {% extends "layout.html" %}
 
 {% block content %}
+    <form action="/contacts" method="get" class="tool-bar">
+        <label for="search">Search Term</label>
+        <input id="search" type="search" name="q" value=""/>
+        <input type="submit" value="Search"/>
+    </form>
     <table>
         <thead>
         <tr>
