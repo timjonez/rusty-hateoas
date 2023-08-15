@@ -1,9 +1,9 @@
 use axum::body::Body;
-use axum::extract::State;
+use axum::extract::{Json, Query, RawForm, State};
 use axum::http::{method::Method, Request, StatusCode};
-use axum::response::{Html, Redirect};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
-use axum::{Form, Json, Router};
+use axum::{Form, Router};
 use serde::{Deserialize, Serialize};
 use sqlx::Pool;
 use std::vec::Vec;
@@ -46,7 +46,10 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
-        .route("/contacts/create", get(create_contact).post(create_contact))
+        .route(
+            "/contacts/create",
+            get(get_create_contact).post(create_contact),
+        )
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
@@ -57,8 +60,14 @@ async fn main() {
         .unwrap();
 }
 
-async fn contacts(State(app): State<Arc<AppState>>) -> Html<String> {
-    let contacts = Contact::all(&app.db).await.unwrap();
+async fn contacts(
+    State(app): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Html<String> {
+    let contacts = match params.get("q") {
+        Some(q) => Contact::search(&app.db, q.to_string()).await.unwrap(),
+        None => Contact::all(&app.db).await.unwrap(),
+    };
     let mut context = Context::new();
     context.insert("contacts", &contacts);
     Html(app.tera.render("contacts/list.html", &context).unwrap())
@@ -66,40 +75,46 @@ async fn contacts(State(app): State<Arc<AppState>>) -> Html<String> {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ContactForm {
-    first: String,
-    last: String,
+    first_name: String,
+    last_name: String,
     email: String,
     phone: String,
 }
 
-async fn create_contact(
-    method: Method,
-    State(app): State<Arc<AppState>>,
-    Form(form): Form<ContactForm>,
-) -> Html<String> {
-    match method {
-        Method::GET => {
-            println!("000000000000000")
-        }
-        Method::POST => {
-            println!("111111111111111, {:?} {}", form, method)
-        }
-        _ => {
-            println!("******************")
+impl ContactForm {
+    fn new() -> Self {
+        ContactForm {
+            first_name: String::new(),
+            last_name: String::new(),
+            email: String::new(),
+            phone: String::new(),
         }
     }
+    fn is_valid(&self) -> bool {
+        if self.first_name.contains("test") {
+            return true;
+        }
+        false
+    }
+}
+
+async fn get_create_contact(State(app): State<Arc<AppState>>) -> Html<String> {
     let mut context = Context::new();
-    context.insert(
-        "contact",
-        &Contact {
-            id: 1,
-            first: "".to_string(),
-            last: Some("".to_string()),
-            phone: "".to_string(),
-            email: "".to_string(),
-        },
-    );
+    context.insert("form", &ContactForm::new());
     Html(app.tera.render("contacts/create.html", &context).unwrap())
+}
+
+async fn create_contact(
+    State(app): State<Arc<AppState>>,
+    Form(form): Form<ContactForm>,
+) -> Response {
+    let mut context = Context::new();
+    if form.is_valid() {
+        // save contact
+        return Redirect::to("/contacts").into_response();
+    }
+    context.insert("form", &form);
+    Html(app.tera.render("contacts/create.html", &context).unwrap()).into_response()
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -119,13 +134,38 @@ impl Contact {
         contacts
     }
 
-    fn search(query: String) -> Self {
-        Contact {
-            id: 1,
-            first: "Test".to_string(),
-            last: Some("User".to_string()),
-            phone: "1234567899".to_string(),
-            email: "test@test.com".to_string(),
-        }
+    async fn search(pool: &Pool<Postgres>, query: String) -> Result<Vec<Contact>, sqlx::Error> {
+        let contacts = sqlx::query_as!(
+            Contact,
+            "
+                SELECT * FROM contacts
+                WHERE
+                    position($1 in first) > 0 OR
+                    position($1 in last) > 0 OR
+                    position($1 in phone) > 0 OR
+                    position($1 in email) > 0
+            ",
+            query
+        )
+        .fetch_all(pool)
+        .await;
+        contacts
+    }
+
+    async fn create(pool: &Pool<Postgres>, form: ContactForm) -> Result<Contact, sqlx::Error> {
+        sqlx::query_as!(
+            Contact,
+            r#"
+                INSERT INTO contacts(first, last, phone, email)
+                VALUES($1, $2, $3, $4)
+                RETURNING *
+            "#,
+            form.first_name,
+            form.last_name,
+            form.phone,
+            form.email
+        )
+        .fetch_one(pool)
+        .await
     }
 }
