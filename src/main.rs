@@ -96,6 +96,9 @@ impl ContactForm {
         }
         false
     }
+    async fn save(self, pool: &Pool<Postgres>) -> Result<Contact, sqlx::Error> {
+        Contact::create(&pool, self).await
+    }
 }
 
 async fn get_create_contact(State(app): State<Arc<AppState>>) -> Html<String> {
@@ -110,7 +113,7 @@ async fn create_contact(
 ) -> Response {
     let mut context = Context::new();
     if form.is_valid() {
-        // save contact
+        let _ = form.save(&app.db).await;
         return Redirect::to("/contacts").into_response();
     }
     context.insert("form", &form);
