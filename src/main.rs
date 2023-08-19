@@ -90,11 +90,13 @@ impl ContactForm {
             phone: String::new(),
         }
     }
-    fn is_valid(&self) -> bool {
-        if self.first_name.contains("test") {
-            return true;
+    fn is_valid(&self) -> (bool, HashMap<String, String>) {
+        let mut errs = HashMap::new();
+        if !self.first_name.contains("test") {
+            errs.insert("first_name".to_string(), "First name must contain \"Test\"".to_string());
+            return (false, errs)
         }
-        false
+        (true, errs)
     }
     async fn save(self, pool: &Pool<Postgres>) -> Result<Contact, sqlx::Error> {
         Contact::create(&pool, self).await
@@ -104,6 +106,7 @@ impl ContactForm {
 async fn get_create_contact(State(app): State<Arc<AppState>>) -> Html<String> {
     let mut context = Context::new();
     context.insert("form", &ContactForm::new());
+    context.insert("errors", &HashMap::<String, String>::new());
     Html(app.tera.render("contacts/create.html", &context).unwrap())
 }
 
@@ -112,10 +115,12 @@ async fn create_contact(
     Form(form): Form<ContactForm>,
 ) -> Response {
     let mut context = Context::new();
-    if form.is_valid() {
+    let (valid, errors) = form.is_valid();
+    if valid {
         let _ = form.save(&app.db).await;
         return Redirect::to("/contacts").into_response();
     }
+    context.insert("errors", &errors);
     context.insert("form", &form);
     Html(app.tera.render("contacts/create.html", &context).unwrap()).into_response()
 }
