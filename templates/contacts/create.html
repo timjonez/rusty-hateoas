@@ -8,18 +8,30 @@
         <p>
             <label for="email">Email</label>
             <input name="email" id="email" type="email" placeholder="Email" value="{{ form.email }}">
+            {% if errors.email %}
+                <span class="error">{{ errors.email }}</span>
+            {% endif %}
         </p>
         <p>
             <label for="first_name">First Name</label>
             <input name="first_name" id="first_name" type="text" placeholder="First Name" value="{{ form.first_name }}">
+            {% if errors.first_name %}
+                <span class="error">{{ errors.first_name }}</span>
+            {% endif %}
         </p>
         <p>
             <label for="last_name">Last Name</label>
             <input name="last_name" id="last_name" type="text" placeholder="Last Name" value="{{ form.last_name }}">
+            {% if errors.last_name %}
+                <span class="error">{{ errors.last_name }}</span>
+            {% endif %}
         </p>
         <p>
             <label for="phone">Phone</label>
             <input name="phone" id="phone" type="text" placeholder="Phone" value="{{ form.phone }}">
+            {% if errors.phone %}
+                <span class="error">{{ errors.phone }}</span>
+            {% endif %}
         </p>
 
         <button>Save</button>
