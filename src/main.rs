@@ -1,5 +1,5 @@
 use axum::body::Body;
-use axum::extract::{Json, Query, RawForm, State};
+use axum::extract::{Json, Query, RawForm, State, Path};
 use axum::http::{method::Method, Request, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
@@ -46,6 +46,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
+        .route("/contacts/:user_id", get(get_contact))
         .route(
             "/contacts/create",
             get(get_create_contact).post(create_contact),
@@ -71,6 +72,13 @@ async fn contacts(
     let mut context = Context::new();
     context.insert("contacts", &contacts);
     Html(app.tera.render("contacts/list.html", &context).unwrap())
+}
+
+async fn get_contact(State(app): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Html<String> {
+    let mut context = Context::new();
+    let contact = Contact::get(&app.db, user_id).await.unwrap();
+    context.insert("contact", &contact);
+    Html(app.tera.render("contacts/detail.html", &context).unwrap())
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -139,6 +147,21 @@ impl Contact {
         let contacts = sqlx::query_as!(Contact, "SELECT * FROM contacts;")
             .fetch_all(pool)
             .await;
+        contacts
+    }
+
+    async fn get(pool: &Pool<Postgres>, id: i32) -> Result<Contact, sqlx::Error> {
+        let contacts = sqlx::query_as!(
+            Contact,
+            "
+                SELECT * FROM contacts
+                WHERE
+                    id = $1
+            ",
+            id
+        )
+        .fetch_one(pool)
+        .await;
         contacts
     }
 
