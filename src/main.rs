@@ -1,5 +1,5 @@
 use axum::body::Body;
-use axum::extract::{Json, Query, RawForm, State, Path};
+use axum::extract::{Json, Path, Query, RawForm, State};
 use axum::http::{method::Method, Request, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
@@ -48,6 +48,11 @@ async fn main() {
         .route("/contacts", get(contacts))
         .route("/contacts/:user_id", get(get_contact))
         .route(
+            "/contacts/:user_id/edit",
+            get(get_edit_contact).post(edit_contact),
+        )
+        .route("/contacts/:user_id/delete", post(delete_contact))
+        .route(
             "/contacts/create",
             get(get_create_contact).post(create_contact),
         )
@@ -81,12 +86,56 @@ async fn get_contact(State(app): State<Arc<AppState>>, Path(user_id): Path<i32>)
     Html(app.tera.render("contacts/detail.html", &context).unwrap())
 }
 
+async fn get_edit_contact(
+    State(app): State<Arc<AppState>>,
+    Path(user_id): Path<i32>,
+) -> Html<String> {
+    let mut context = Context::new();
+    let contact = Contact::get(&app.db, user_id).await.unwrap();
+    let form = ContactForm::from(&contact);
+    context.insert("form", &form);
+    context.insert("contact", &contact);
+    context.insert("errors", &HashMap::<String, String>::new());
+    Html(app.tera.render("contacts/edit.html", &context).unwrap())
+}
+
+async fn edit_contact(
+    State(app): State<Arc<AppState>>,
+    Path(user_id): Path<i32>,
+    Form(form): Form<ContactForm>,
+) -> Response {
+    let mut context = Context::new();
+    let (valid, errors) = form.is_valid();
+    if valid {
+        let _ = form.update(user_id, &app.db).await;
+        return Redirect::to("/contacts").into_response();
+    }
+    context.insert("errors", &errors);
+    context.insert("form", &form);
+    Html(app.tera.render("contacts/create.html", &context).unwrap()).into_response()
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct ContactForm {
     first_name: String,
     last_name: String,
     email: String,
     phone: String,
+}
+
+impl From<&Contact> for ContactForm {
+    fn from(contact: &Contact) -> Self {
+        let last_name = match contact.last.clone() {
+            Some(n) => n,
+            None => String::new(),
+        };
+        Self {
+            first_name: contact.first.clone(),
+            last_name: last_name,
+            email: contact.email.clone(),
+            phone: contact.phone.clone(),
+        }
+    }
 }
 
 impl ContactForm {
@@ -101,13 +150,26 @@ impl ContactForm {
     fn is_valid(&self) -> (bool, HashMap<String, String>) {
         let mut errs = HashMap::new();
         if !self.first_name.contains("test") {
-            errs.insert("first_name".to_string(), "First name must contain \"Test\"".to_string());
-            return (false, errs)
+            errs.insert(
+                "first_name".to_string(),
+                "First name must contain \"Test\"".to_string(),
+            );
+            return (false, errs);
         }
         (true, errs)
     }
     async fn save(self, pool: &Pool<Postgres>) -> Result<Contact, sqlx::Error> {
         Contact::create(&pool, self).await
+    }
+    async fn update(self, id: i32, pool: &Pool<Postgres>) -> Result<Contact, sqlx::Error> {
+        let contact = Contact {
+            id,
+            first: self.first_name,
+            last: Some(self.last_name),
+            phone: self.phone,
+            email: self.email,
+        };
+        Contact::update(contact, &pool).await
     }
 }
 
@@ -131,6 +193,19 @@ async fn create_contact(
     context.insert("errors", &errors);
     context.insert("form", &form);
     Html(app.tera.render("contacts/create.html", &context).unwrap()).into_response()
+}
+
+async fn delete_contact(State(app): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Response {
+    match Contact::get(&app.db, user_id).await {
+        Err(e) => {
+            println!("could not delete contact {}: {}", user_id, e);
+            Redirect::to("/contacts").into_response()
+        }
+        Ok(contact) => {
+            let _ = contact.delete(&app.db).await;
+            Redirect::to("/contacts").into_response()
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -198,5 +273,45 @@ impl Contact {
         )
         .fetch_one(pool)
         .await
+    }
+
+    async fn update(self, pool: &Pool<Postgres>) -> Result<Contact, sqlx::Error> {
+        sqlx::query_as!(
+            Contact,
+            r#"
+                UPDATE contacts
+                SET
+                    first = $1,
+                    last = $2,
+                    phone = $3,
+                    email = $4
+                WHERE id = $5
+                RETURNING *
+            "#,
+            self.first,
+            self.last,
+            self.phone,
+            self.email,
+            self.id
+        )
+        .fetch_one(pool)
+        .await
+    }
+
+    async fn delete(self, pool: &Pool<Postgres>) -> bool {
+        let result = sqlx::query!(
+            r#"
+                DELETE FROM contacts
+                WHERE id = $1
+            "#,
+            self.id
+        )
+        .execute(pool)
+        .await;
+
+        match result {
+            Err(_) => false,
+            Ok(r) => r.rows_affected() == 1,
+        }
     }
 }
