@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::Pool;
 use std::vec::Vec;
 use tera::{Context, Tera};
+use tower_http::services::ServeDir;
 
 use sqlx::postgres::{PgPool, PgPoolOptions, Postgres};
 use std::collections::HashMap;
@@ -44,6 +45,7 @@ async fn main() {
     let state = Arc::new(AppState { tera, db: pool });
 
     let app = Router::new()
+        .nest_service("/static", ServeDir::new("static"))
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
         .route("/contacts/:user_id", get(get_contact))
