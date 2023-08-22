@@ -2,7 +2,7 @@ use axum::body::Body;
 use axum::extract::{Json, Path, Query, RawForm, State};
 use axum::http::{method::Method, Request, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, delete};
 use axum::{Form, Router};
 use serde::{Deserialize, Serialize};
 use sqlx::Pool;
@@ -48,12 +48,11 @@ async fn main() {
         .nest_service("/static", ServeDir::new("static"))
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
-        .route("/contacts/:user_id", get(get_contact))
+        .route("/contacts/:user_id", get(get_contact).delete(delete_contact))
         .route(
             "/contacts/:user_id/edit",
             get(get_edit_contact).post(edit_contact),
         )
-        .route("/contacts/:user_id/delete", post(delete_contact))
         .route(
             "/contacts/create",
             get(get_create_contact).post(create_contact),
