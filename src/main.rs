@@ -2,7 +2,7 @@ use axum::body::Body;
 use axum::extract::{Json, Path, Query, RawForm, State};
 use axum::http::{method::Method, Request, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::routing::{get, post, delete};
+use axum::routing::{delete, get, post};
 use axum::{Form, Router};
 use serde::{Deserialize, Serialize};
 use sqlx::Pool;
@@ -46,9 +46,13 @@ async fn main() {
 
     let app = Router::new()
         .nest_service("/static", ServeDir::new("static"))
+        .route("/validate/email", get(validate_email))
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
-        .route("/contacts/:user_id", get(get_contact).delete(delete_contact))
+        .route(
+            "/contacts/:user_id",
+            get(get_contact).delete(delete_contact),
+        )
         .route(
             "/contacts/:user_id/edit",
             get(get_edit_contact).post(edit_contact),
@@ -85,6 +89,18 @@ async fn get_contact(State(app): State<Arc<AppState>>, Path(user_id): Path<i32>)
     let contact = Contact::get(&app.db, user_id).await.unwrap();
     context.insert("contact", &contact);
     Html(app.tera.render("contacts/detail.html", &context).unwrap())
+}
+
+async fn validate_email(
+    State(app): State<Arc<AppState>>,
+    Query(args): Query<HashMap<String, String>>,
+) -> String {
+    let email = args.get("email").unwrap();
+    let contacts = Contact::search(&app.db, email.clone()).await.unwrap();
+    match contacts.len() {
+        0 => return String::new(),
+        _ => return String::from("This email is already taken"),
+    }
 }
 
 async fn get_edit_contact(
