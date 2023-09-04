@@ -75,11 +75,17 @@ async fn contacts(
     State(app): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Html<String> {
+    let page: i32 = match params.contains_key("page") {
+        true => params.get("page").unwrap().parse().unwrap(),
+        false => 1
+    };
+    let offset: i64 = ((page - 1) * 5).into();
     let contacts = match params.get("q") {
         Some(q) => Contact::search(&app.db, q.to_string()).await.unwrap(),
-        None => Contact::all(&app.db).await.unwrap(),
+        None => Contact::all(&app.db, offset).await.unwrap(),
     };
     let mut context = Context::new();
+    context.insert("page", &page);
     context.insert("contacts", &contacts);
     Html(app.tera.render("contacts/list.html", &context).unwrap())
 }
@@ -234,9 +240,10 @@ struct Contact {
     email: String,
 }
 
+
 impl Contact {
-    async fn all(pool: &Pool<Postgres>) -> Result<Vec<Contact>, sqlx::Error> {
-        let contacts = sqlx::query_as!(Contact, "SELECT * FROM contacts;")
+    async fn all(pool: &Pool<Postgres>, offset: i64) -> Result<Vec<Contact>, sqlx::Error> {
+        let contacts = sqlx::query_as!(Contact, "SELECT * FROM contacts OFFSET $1 LIMIT 5;", offset)
             .fetch_all(pool)
             .await;
         contacts
