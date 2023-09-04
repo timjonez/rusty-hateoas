@@ -96,7 +96,7 @@ async fn validate_email(
     Query(args): Query<HashMap<String, String>>,
 ) -> String {
     let email = args.get("email").unwrap();
-    let contacts = Contact::search(&app.db, email.clone()).await.unwrap();
+    let contacts = Contact::filter_email(&app.db, email).await.unwrap();
     match contacts.len() {
         0 => return String::new(),
         _ => return String::from("This email is already taken"),
@@ -255,6 +255,11 @@ impl Contact {
         .fetch_one(pool)
         .await;
         contacts
+    }
+
+    async fn filter_email(pool: &Pool<Postgres>, value: &String) -> Result<Vec<Contact>, sqlx::Error> {
+        let query = sqlx::query_as!(Contact, "SELECT * FROM contacts WHERE email = $1", value);
+        query.fetch_all(pool).await
     }
 
     async fn search(pool: &Pool<Postgres>, query: String) -> Result<Vec<Contact>, sqlx::Error> {
