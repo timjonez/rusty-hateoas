@@ -1,6 +1,6 @@
 use axum::body::Body;
 use axum::extract::{Json, Path, Query, RawForm, State};
-use axum::http::{method::Method, Request, StatusCode};
+use axum::http::{method::Method, Request, StatusCode, header::HeaderMap};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{delete, get, post};
 use axum::{Form, Router};
@@ -72,6 +72,7 @@ async fn main() {
 }
 
 async fn contacts(
+    headers: HeaderMap,
     State(app): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Html<String> {
@@ -82,11 +83,11 @@ async fn contacts(
     let offset: i64 = ((page - 1) * 5).into();
     let contacts = match params.get("q") {
         Some(q) => Contact::search(&app.db, q.to_string()).await.unwrap(),
-        None => Contact::all(&app.db, offset).await.unwrap(),
-    };
-    let mut context = Context::new();
-    context.insert("page", &page);
-    context.insert("contacts", &contacts);
+        None => Contactsrc/main.rss.contains_key("hx-trigger") {
+        if headers.get("hx-trigger").unwrap() == "search" {
+            return Html(app.tera.render("contacts/_rows.html", &context).unwrap())
+        }
+    }
     Html(app.tera.render("contacts/list.html", &context).unwrap())
 }
 
