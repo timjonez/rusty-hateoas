@@ -83,7 +83,12 @@ async fn contacts(
     let offset: i64 = ((page - 1) * 5).into();
     let contacts = match params.get("q") {
         Some(q) => Contact::search(&app.db, q.to_string()).await.unwrap(),
-        None => Contactsrc/main.rss.contains_key("hx-trigger") {
+        None => Contact::all(&app.db, offset).await.unwrap(),
+    };
+    let mut context = Context::new();
+    context.insert("page", &page);
+    context.insert("contacts", &contacts);
+    if headers.contains_key("hx-trigger") {
         if headers.get("hx-trigger").unwrap() == "search" {
             return Html(app.tera.render("contacts/_rows.html", &context).unwrap())
         }
