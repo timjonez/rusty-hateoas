@@ -49,6 +49,7 @@ async fn main() {
         .route("/validate/email", get(validate_email))
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
         .route("/contacts", get(contacts))
+        .route("/contacts/count", get(num_contacts))
         .route(
             "/contacts/:user_id",
             get(get_contact).delete(delete_contact),
@@ -94,6 +95,11 @@ async fn contacts(
         }
     }
     Html(app.tera.render("contacts/list.html", &context).unwrap())
+}
+
+async fn num_contacts(State(app): State<Arc<AppState>>) -> String {
+    let count = Contact::count(&app.db).await;
+    format!("{} total contacts", count)
 }
 
 async fn get_contact(State(app): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Html<String> {
@@ -248,6 +254,14 @@ struct Contact {
 
 
 impl Contact {
+    async fn count(pool: &Pool<Postgres>) -> u64 {
+        let res = sqlx::query!("SELECT count(id) from contacts")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        res.count.unwrap().try_into().unwrap()
+    }
+
     async fn all(pool: &Pool<Postgres>, offset: i64) -> Result<Vec<Contact>, sqlx::Error> {
         let contacts = sqlx::query_as!(Contact, "SELECT * FROM contacts OFFSET $1 LIMIT 5;", offset)
             .fetch_all(pool)
