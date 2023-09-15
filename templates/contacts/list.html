@@ -39,5 +39,8 @@
     </div>
     <p>
         <a href="/contacts/create">Add Contact</a>
+        <span hx-get="/contacts/count" hx-trigger="load">
+            <img id="spinner" class="htmx-indicator" src="/static/img/spinning-circles.svg"/>
+        </span>
     </p>
 {% endblock content %}
