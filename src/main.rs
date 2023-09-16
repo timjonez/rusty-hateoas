@@ -1,6 +1,6 @@
 use axum::body::Body;
 use axum::extract::{Json, Path, Query, RawForm, State};
-use axum::http::{method::Method, Request, StatusCode, header::HeaderMap};
+use axum::http::{header::HeaderMap, method::Method, Request, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{delete, get, post};
 use axum::{Form, Router};
@@ -79,7 +79,7 @@ async fn contacts(
 ) -> Html<String> {
     let page: i32 = match params.contains_key("page") {
         true => params.get("page").unwrap().parse().unwrap(),
-        false => 1
+        false => 1,
     };
     let offset: i64 = ((page - 1) * 5).into();
     let contacts = match params.get("q") {
@@ -91,7 +91,7 @@ async fn contacts(
     context.insert("contacts", &contacts);
     if headers.contains_key("hx-trigger") {
         if headers.get("hx-trigger").unwrap() == "search" {
-            return Html(app.tera.render("contacts/_rows.html", &context).unwrap())
+            return Html(app.tera.render("contacts/_rows.html", &context).unwrap());
         }
     }
     Html(app.tera.render("contacts/list.html", &context).unwrap())
@@ -230,17 +230,30 @@ async fn create_contact(
     Html(app.tera.render("contacts/create.html", &context).unwrap()).into_response()
 }
 
-async fn delete_contact(State(app): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Response {
-    match Contact::get(&app.db, user_id).await {
+async fn delete_contact(
+    headers: HeaderMap,
+    State(app): State<Arc<AppState>>,
+    Path(user_id): Path<i32>,
+) -> Response {
+    let success = match Contact::get(&app.db, user_id).await {
         Err(e) => {
             println!("could not delete contact {}: {}", user_id, e);
-            Redirect::to("/contacts").into_response()
+            false
         }
         Ok(contact) => {
             let _ = contact.delete(&app.db).await;
-            Redirect::to("/contacts").into_response()
+            true
         }
+    };
+    let is_delete_btn = match headers.get("hx-trigger") {
+        None => false,
+        Some(id) => id == "delete-btn",
+    };
+
+    if is_delete_btn {
+        return Redirect::to("/contacts").into_response();
     }
+    "".into_response()
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -252,7 +265,6 @@ struct Contact {
     email: String,
 }
 
-
 impl Contact {
     async fn count(pool: &Pool<Postgres>) -> u64 {
         let res = sqlx::query!("SELECT count(id) from contacts")
@@ -263,9 +275,10 @@ impl Contact {
     }
 
     async fn all(pool: &Pool<Postgres>, offset: i64) -> Result<Vec<Contact>, sqlx::Error> {
-        let contacts = sqlx::query_as!(Contact, "SELECT * FROM contacts OFFSET $1 LIMIT 5;", offset)
-            .fetch_all(pool)
-            .await;
+        let contacts =
+            sqlx::query_as!(Contact, "SELECT * FROM contacts OFFSET $1 LIMIT 5;", offset)
+                .fetch_all(pool)
+                .await;
         contacts
     }
 
@@ -284,7 +297,10 @@ impl Contact {
         contacts
     }
 
-    async fn filter_email(pool: &Pool<Postgres>, value: &String) -> Result<Vec<Contact>, sqlx::Error> {
+    async fn filter_email(
+        pool: &Pool<Postgres>,
+        value: &String,
+    ) -> Result<Vec<Contact>, sqlx::Error> {
         let query = sqlx::query_as!(Contact, "SELECT * FROM contacts WHERE email = $1", value);
         query.fetch_all(pool).await
     }
