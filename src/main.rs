@@ -48,7 +48,7 @@ async fn main() {
         .nest_service("/static", ServeDir::new("static"))
         .route("/validate/email", get(validate_email))
         .route("/", get(|| async { Redirect::permanent("/contacts") }))
-        .route("/contacts", get(contacts))
+        .route("/contacts", get(contacts).delete(delete_contact_list))
         .route("/contacts/count", get(num_contacts))
         .route(
             "/contacts/:user_id",
@@ -254,6 +254,35 @@ async fn delete_contact(
         return Redirect::to("/contacts").into_response();
     }
     "".into_response()
+}
+
+async fn delete_contact_list(State(app): State<Arc<AppState>>, raw_form: RawForm) -> Response {
+    let mut ids: Vec<i32> = Vec::new();
+    let str_form = match std::str::from_utf8(&raw_form.0) {
+        Ok(s) => s,
+        Err(e) => panic!("{}", e),
+    };
+
+    for i in str_form.split("&") {
+        let parts: Vec<&str> = i.split("=").collect();
+        if parts.len() == 2 && parts.first().unwrap() == &"selected_contact_ids" {
+            let str_id = parts.last().unwrap();
+            match str_id.parse::<i32>() {
+                Ok(id) => ids.push(id.into()),
+                Err(_) => {}
+            }
+        }
+    }
+
+    for id in ids {
+        match Contact::get(&app.db, id).await {
+            Err(_) => {}
+            Ok(contact) => {
+                let _ = contact.delete(&app.db).await;
+            }
+        }
+    }
+    return Redirect::to("/contacts").into_response();
 }
 
 #[derive(Debug, Deserialize, Serialize)]
