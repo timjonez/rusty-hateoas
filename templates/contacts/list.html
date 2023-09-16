@@ -17,30 +17,45 @@
         <input type="submit" value="Search"/>
         <img id="spinner" class="htmx-indicator" src="/static/img/spinning-circles.svg" alt="Request In Flight..."/>
     </form>
-    <table>
-        <thead>
-        <tr>
-            <th>First</th> <th>Last</th> <th>Phone</th> <th>Email</th> <th></th>
-        </tr>
-        </thead>
-        <tbody>
-        {% include "contacts/_rows.html" %}
-        </tbody>
-    </table>
-    <div>
-        <span>
-            {% if page > 1 %}
-                <a href="/contacts?page={{ page - 1 }}">Previous</a>
-            {% endif %}
-            {% if contacts|length >= 5 %}
-                <a href="/contacts?page={{ page + 1 }}">Next</a>
-            {% endif %}
-        </span>
-    </div>
-    <p>
-        <a href="/contacts/create">Add Contact</a>
-        <span hx-get="/contacts/count" hx-trigger="load">
-            <img id="spinner" class="htmx-indicator" src="/static/img/spinning-circles.svg"/>
-        </span>
-    </p>
+    <form>
+        <table>
+            <thead>
+            <tr>
+                <th></th>
+                <th>First</th>
+                <th>Last</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% include "contacts/_rows.html" %}
+            </tbody>
+        </table>
+        <div>
+            <span>
+                {% if page > 1 %}
+                    <a href="/contacts?page={{ page - 1 }}">Previous</a>
+                {% endif %}
+                {% if contacts|length >= 5 %}
+                    <a href="/contacts?page={{ page + 1 }}">Next</a>
+                {% endif %}
+            </span>
+        </div>
+        <p>
+            <a href="/contacts/create">Add Contact</a>
+            <span hx-get="/contacts/count" hx-trigger="load">
+                <img id="spinner" class="htmx-indicator" src="/static/img/spinning-circles.svg"/>
+            </span>
+        </p>
+        <div>
+            <button hx-delete="/contacts"
+                hx-confirm="Are you sure you want to delete these contacts?"
+                hx-target="body"
+            >
+                Delete Selected Contacts
+            </button>
+        </div>
+    </form>
 {% endblock content %}
