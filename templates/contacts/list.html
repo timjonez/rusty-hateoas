@@ -4,6 +4,7 @@
     <form action="/contacts" method="get" class="tool-bar">
         <label for="search">Search Term</label>
         <input
+            _="on keydown[altKey and code is 'KeyS'] from the window me.focus()"
             id="search"
             type="search"
             name="q"
@@ -17,7 +18,23 @@
         <input type="submit" value="Search"/>
         <img id="spinner" class="htmx-indicator" src="/static/img/spinning-circles.svg" alt="Request In Flight..."/>
     </form>
-    <form>
+    <form x-data="{ selected: [] }">
+        <template x-if="selected.length > 0">
+            <div class="box info tool-bar">
+                <slot x-text="selected.length"></slot>
+                contacts selected
+                <button
+                    type="button"
+                    class="bad bg color border"
+                    hx-delete="/contacts"
+                    hx-target="body"
+                    hx-trigger="confirmed"
+                    @click="sweetConfirm($el, { title: 'Delete these contacts?', showCancelButton: true, confirmButtonText: 'Delete'})"
+                >Delete</button>
+                <hr aria-orientation="vertical">
+                <button type="button" @click="selected = []">Cancel</button>
+            </div>
+        </template>
         <table>
             <thead>
             <tr>
@@ -58,4 +75,14 @@
             </button>
         </div>
     </form>
+    <script>
+        function sweetConfirm(elt, config) {
+            Swal.fire(config)
+                .then((result) => {
+                    if (result.isConfirmed) {
+                        elt.dispatchEvent(new Event('confirmed'));
+                    }
+                });
+            }
+    </script>
 {% endblock content %}
